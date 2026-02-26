@@ -4,8 +4,8 @@ import SearchBar from '../components/SearchBar';
 import Sidebar from '../components/Sidebar';
 import type { AlgorithmType } from '../components/Sidebar';
 import ProgressSlider from '../components/ProgressSlider';
-import type { LatLng, AlgorithmResult } from '../Algorithm/types';
-import { buildGraph } from '../Algorithm/graphBuilder';
+import type { LatLng, AlgorithmResult, Graph } from '../Algorithm/types';
+import { buildOsmGraph } from '../Algorithm/osmGraphBuilder';
 import { bfs } from '../Algorithm/bfs';
 import { dijkstra } from '../Algorithm/dijkstra';
 import { bidirectionalBfs } from '../Algorithm/bidirectionalBfs';
@@ -19,6 +19,7 @@ const ShortestPath: React.FC = () => {
   const [endPos, setEndPos] = useState<LatLng | null>(null);
   const [algorithm, setAlgorithm] = useState<AlgorithmType>('aStar');
   const [result, setResult] = useState<AlgorithmResult | null>(null);
+  const [osmGraph, setOsmGraph] = useState<Graph | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [mapCenter, setMapCenter] = useState<LatLng>(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
@@ -41,14 +42,18 @@ const ShortestPath: React.FC = () => {
     }
   }, []);
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (!startPos || !endPos) return;
-    setStatus('Building graph and running algorithm…');
+    setStatus('Fetching road data from OpenStreetMap…');
     setResult(null);
+    setOsmGraph(null);
     setCurrentStep(0);
 
     try {
-      const graph = buildGraph(startPos, endPos, 20);
+      const graph = await buildOsmGraph(startPos, endPos);
+      setOsmGraph(graph);
+      setStatus(`Road network loaded (${graph.nodes.size} nodes). Running algorithm…`);
+
       let res: AlgorithmResult;
 
       switch (algorithm) {
@@ -63,12 +68,12 @@ const ShortestPath: React.FC = () => {
       setCurrentStep(res.exploredOrder.length - 1);
 
       if (res.path.length > 0) {
-        setStatus(`Done! Explored ${res.exploredOrder.length} nodes. Path length: ${res.path.length} nodes.`);
+        setStatus(`Done! Explored ${res.exploredOrder.length} nodes. Path: ${res.path.length} nodes.`);
       } else {
-        setStatus('Algorithm finished but no path was found.');
+        setStatus('No path found. The locations may not be connected by roads.');
       }
     } catch (err) {
-      setStatus('Error running algorithm.');
+      setStatus(`Error: ${err instanceof Error ? err.message : 'Failed to fetch road data.'}`);
       console.error(err);
     }
   };
@@ -77,6 +82,7 @@ const ShortestPath: React.FC = () => {
     setStartPos(null);
     setEndPos(null);
     setResult(null);
+    setOsmGraph(null);
     setCurrentStep(0);
     setStatus('Place a START (right-click) and END (left-click) marker on the map.');
   };
@@ -86,29 +92,23 @@ const ShortestPath: React.FC = () => {
     setMapZoom(12);
   };
 
-  // Memoize graph separately so it's only rebuilt when start/end change
-  const graph = useMemo(
-    () => (startPos && endPos ? buildGraph(startPos, endPos, 20) : null),
-    [startPos, endPos]
-  );
-
   // Compute displayed explored positions up to currentStep
   const exploredPositions = useMemo<LatLng[]>(() => {
-    if (!result || !graph) return [];
+    if (!result || !osmGraph) return [];
     return result.exploredOrder
       .slice(0, currentStep + 1)
-      .map((id) => graph.nodes.get(id)?.position)
+      .map((id) => osmGraph.nodes.get(id)?.position)
       .filter((p): p is LatLng => p !== undefined);
-  }, [result, currentStep, graph]);
+  }, [result, currentStep, osmGraph]);
 
   // Show path only when slider is at the last step
   const pathPositions = useMemo<LatLng[]>(() => {
-    if (!result || result.path.length === 0 || !graph) return [];
+    if (!result || result.path.length === 0 || !osmGraph) return [];
     if (currentStep < result.exploredOrder.length - 1) return [];
     return result.path
-      .map((id) => graph.nodes.get(id)?.position)
+      .map((id) => osmGraph.nodes.get(id)?.position)
       .filter((p): p is LatLng => p !== undefined);
-  }, [result, currentStep, graph]);
+  }, [result, currentStep, osmGraph]);
 
   const steps = result ? result.exploredOrder.length : 0;
 
