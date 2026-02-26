@@ -10,6 +10,9 @@ import { bfs } from '../Algorithm/bfs';
 import { dijkstra } from '../Algorithm/dijkstra';
 import { bidirectionalBfs } from '../Algorithm/bidirectionalBfs';
 import { aStar } from '../Algorithm/aStar';
+import { alt } from '../Algorithm/alt';
+import { ch } from '../Algorithm/ch';
+import { cch } from '../Algorithm/cch';
 
 const DEFAULT_CENTER: LatLng = { lat: 20, lng: 0 };
 const DEFAULT_ZOOM = 5;
@@ -57,11 +60,14 @@ const ShortestPath: React.FC = () => {
       let res: AlgorithmResult;
 
       switch (algorithm) {
-        case 'bfs':           res = bfs(graph); break;
-        case 'dijkstra':      res = dijkstra(graph); break;
+        case 'bfs':              res = bfs(graph); break;
+        case 'dijkstra':         res = dijkstra(graph); break;
         case 'bidirectionalBfs': res = bidirectionalBfs(graph); break;
-        case 'aStar':         res = aStar(graph); break;
-        default:              res = aStar(graph);
+        case 'aStar':            res = aStar(graph); break;
+        case 'alt':              res = alt(graph); break;
+        case 'ch':               res = ch(graph); break;
+        case 'cch':              res = cch(graph); break;
+        default:                 res = aStar(graph);
       }
 
       setResult(res);
