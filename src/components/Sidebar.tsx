@@ -1,6 +1,13 @@
 import React from 'react';
 
-export type AlgorithmType = 'bfs' | 'dijkstra' | 'bidirectionalBfs' | 'aStar';
+export type AlgorithmType =
+  | 'bfs'
+  | 'dijkstra'
+  | 'bidirectionalBfs'
+  | 'aStar'
+  | 'alt'
+  | 'ch'
+  | 'cch';
 
 interface SidebarProps {
   algorithm: AlgorithmType;
@@ -11,11 +18,14 @@ interface SidebarProps {
   status: string;
 }
 
-const algorithms: { value: AlgorithmType; label: string }[] = [
-  { value: 'bfs', label: 'BFS' },
-  { value: 'dijkstra', label: 'Dijkstra' },
-  { value: 'bidirectionalBfs', label: 'Bidirectional BFS' },
-  { value: 'aStar', label: 'A*' },
+const algorithms: { value: AlgorithmType; label: string; description: string }[] = [
+  { value: 'bfs',             label: 'BFS',                             description: 'Breadth-First Search – explores equally in all directions' },
+  { value: 'dijkstra',        label: 'Dijkstra',                        description: "Dijkstra's algorithm – optimal for weighted graphs" },
+  { value: 'bidirectionalBfs',label: 'Bidirectional BFS',               description: 'BFS from both ends simultaneously' },
+  { value: 'aStar',           label: 'A*',                              description: 'A* – guided by a geographic heuristic' },
+  { value: 'alt',             label: 'ALT (A* + Landmarks)',            description: 'A* with Landmarks & Triangle Inequality – tighter lower bounds than plain A*' },
+  { value: 'ch',              label: 'Contraction Hierarchies (CH)',    description: 'Preprocesses node importance; fast bidirectional Dijkstra on contracted graph' },
+  { value: 'cch',             label: 'Customizable CH (CCH)',           description: 'Topology-only preprocessing + fast metric customization; ideal for dynamic weights' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -46,17 +56,22 @@ const Sidebar: React.FC<SidebarProps> = ({
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {algorithms.map(({ value, label }) => (
-          <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
+        {algorithms.map(({ value, label, description }) => (
+          <label key={value} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 14 }}>
             <input
               type="radio"
               name="algorithm"
               value={value}
               checked={algorithm === value}
               onChange={() => onAlgorithmChange(value)}
-              style={{ accentColor: '#2563eb' }}
+              style={{ accentColor: '#2563eb', marginTop: 3, flexShrink: 0 }}
             />
-            {label}
+            <span>
+              <span style={{ fontWeight: algorithm === value ? 700 : 400 }}>{label}</span>
+              {algorithm === value && (
+                <span style={{ display: 'block', fontSize: 11, color: '#6b7280', marginTop: 1 }}>{description}</span>
+              )}
+            </span>
           </label>
         ))}
       </div>
