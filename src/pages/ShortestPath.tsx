@@ -12,7 +12,7 @@ import { bidirectionalBfs } from '../Algorithm/bidirectionalBfs';
 import { aStar } from '../Algorithm/aStar';
 
 const DEFAULT_CENTER: LatLng = { lat: 20, lng: 0 };
-const DEFAULT_ZOOM = 3;
+const DEFAULT_ZOOM = 5;
 
 const ShortestPath: React.FC = () => {
   const [startPos, setStartPos] = useState<LatLng | null>(null);

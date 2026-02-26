@@ -21,6 +21,9 @@ interface OverpassResponse {
 
 const OVERPASS_TIMEOUT_SECONDS = 30;
 
+/** Maximum allowed bounding-box span (degrees) to keep queries fast. */
+const MAX_BOX_DEGREES = 0.5;
+
 /**
  * Fetch the road network from OpenStreetMap via the Overpass API and build
  * a Graph that can be consumed by the existing algorithm implementations.
@@ -40,6 +43,15 @@ export async function buildOsmGraph(start: LatLng, end: LatLng): Promise<Graph> 
   const north = (maxLat + padLat).toFixed(6);
   const west  = (minLng - padLng).toFixed(6);
   const east  = (maxLng + padLng).toFixed(6);
+
+  const latSpan = parseFloat(north) - parseFloat(south);
+  const lngSpan = parseFloat(east) - parseFloat(west);
+  if (latSpan > MAX_BOX_DEGREES || lngSpan > MAX_BOX_DEGREES) {
+    throw new Error(
+      `The area between your two points is too large (${latSpan.toFixed(2)}° × ${lngSpan.toFixed(2)}°). ` +
+      `Please choose points that are closer together (max ~${MAX_BOX_DEGREES}° apart) to keep loading fast.`
+    );
+  }
 
   const query = `[out:json][timeout:${OVERPASS_TIMEOUT_SECONDS}];(way[highway](${south},${west},${north},${east}););(._;>;);out body;`;
   const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
