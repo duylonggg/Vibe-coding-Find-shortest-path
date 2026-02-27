@@ -337,8 +337,8 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                         <Slider
                             value={settings.radius}
                             min={1}
-                            max={10}
-                            step={0.5}
+                            max={100}
+                            step={1}
                             onChange={(_, v) => changeRadius(v)}
                             style={{ color: "#2ea064" }}
                         />
