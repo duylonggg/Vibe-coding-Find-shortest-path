@@ -9,10 +9,10 @@ import { useEffect, useRef, useState } from "react";
 import { getBoundingBoxFromPolygon, getMapGraph, getNearestNode } from "../services/MapService";
 import PathfindingState from "../models/PathfindingState";
 import Interface from "./Interface";
-import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE } from "../config";
+import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE, MAP_STYLE_DARK } from "../config";
 import useSmoothStateChange from "../hooks/useSmoothStateChange";
 
-function Map() {
+function Map({ isDark = false, onToggleDark }) {
     const [startNode, setStartNode] = useState(null);
     const [endNode, setEndNode] = useState(null);
     const [selectionRadius, setSelectionRadius] = useState([]);
@@ -320,7 +320,7 @@ function Map() {
                     />
                     <MapGL 
                         reuseMaps mapLib={maplibregl} 
-                        mapStyle={MAP_STYLE} 
+                        mapStyle={isDark ? MAP_STYLE_DARK : MAP_STYLE} 
                         doubleClickZoom={false}
                     />
                 </DeckGL>
@@ -349,6 +349,8 @@ function Map() {
                 placeEnd={placeEnd}
                 setPlaceEnd={setPlaceEnd}
                 changeRadius={changeRadius}
+                isDark={isDark}
+                onToggleDark={onToggleDark}
             />
             <div className="attrib-container">
                 <div className="maplibregl-ctrl-attrib-inner">
