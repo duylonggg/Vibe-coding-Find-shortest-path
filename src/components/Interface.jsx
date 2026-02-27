@@ -358,7 +358,7 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                         <Slider
                             value={settings.speed}
                             min={1}
-                            max={10}
+                            max={100}
                             step={1}
                             onChange={(_, v) => setSettings({ ...settings, speed: v })}
                             style={{ color: "#2ea064" }}
