@@ -22,6 +22,71 @@ interface OverpassResponse {
 /** Maximum allowed bounding-box span (degrees). ~2° ≈ 220 km. */
 const MAX_BOX_DEGREES = 2.0;
 
+// ── Spatial grid index ───────────────────────────────────────────────────────
+
+/** Maximum number of grid rings to search before giving up. */
+const SPATIAL_MAX_RINGS = 12;
+
+/**
+ * Lightweight 2-D spatial grid that partitions nodes into fixed-size cells,
+ * reducing nearest-node lookup from O(n) to roughly O(1) for typical road
+ * densities.  A cell size of 0.002° ≈ 200 m is a good default for city roads.
+ */
+export class SpatialGrid {
+  private readonly cells: Map<string, string[]> = new Map();
+  private readonly cellSize: number;
+
+  constructor(cellSize = 0.002) {
+    this.cellSize = cellSize;
+  }
+
+  private key(lat: number, lng: number): string {
+    return `${Math.floor(lat / this.cellSize)},${Math.floor(lng / this.cellSize)}`;
+  }
+
+  add(id: string, lat: number, lng: number): void {
+    const k = this.key(lat, lng);
+    let bucket = this.cells.get(k);
+    if (!bucket) { bucket = []; this.cells.set(k, bucket); }
+    bucket.push(id);
+  }
+
+  /**
+   * Returns the ID of the node nearest to (lat, lng) using squared planar
+   * distance.  Expands search rings and terminates after ring r once the
+   * best found squared distance is ≤ (r × cellSize)², guaranteeing that no
+   * cell in ring r+1 or beyond can contain a closer node.
+   */
+  nearestId(lat: number, lng: number, nodes: Map<string, GraphNode>): string {
+    const baseRow = Math.floor(lat / this.cellSize);
+    const baseCol = Math.floor(lng / this.cellSize);
+    let bestId = '';
+    let bestDist = Infinity;
+
+    for (let r = 0; r <= SPATIAL_MAX_RINGS; r++) {
+      for (let dr = -r; dr <= r; dr++) {
+        for (let dc = -r; dc <= r; dc++) {
+          // Only visit border cells of the current ring
+          if (r > 0 && Math.abs(dr) < r && Math.abs(dc) < r) continue;
+          const bucket = this.cells.get(`${baseRow + dr},${baseCol + dc}`);
+          if (!bucket) continue;
+          for (const id of bucket) {
+            const p = nodes.get(id)!.position;
+            const d = (p.lat - lat) ** 2 + (p.lng - lng) ** 2;
+            if (d < bestDist) { bestDist = d; bestId = id; }
+          }
+        }
+      }
+      // After processing ring r: any node in ring r+1 or beyond is at
+      // Euclidean distance strictly greater than r × cellSize from the query.
+      // If bestDist ≤ (r × cellSize)², no further ring can improve it.
+      const bound = r * this.cellSize;
+      if (bestId !== '' && bestDist <= bound * bound) break;
+    }
+    return bestId;
+  }
+}
+
 /**
  * Choose the Overpass highway filter based on the size of the requested area.
  * Larger areas use only major roads to keep the response payload manageable.
@@ -50,6 +115,7 @@ function getOverpassTimeout(latSpan: number, lngSpan: number): number {
 // ── In-memory graph cache ────────────────────────────────────────────────────
 interface CacheEntry {
   graph: Graph;
+  index: SpatialGrid;
   south: number;
   north: number;
   west: number;
@@ -60,24 +126,24 @@ interface CacheEntry {
 const GRAPH_CACHE_MAX = 8;
 const graphCache: CacheEntry[] = [];
 
-function getCachedGraph(s: number, n: number, w: number, e: number): Graph | null {
+function getCachedEntry(s: number, n: number, w: number, e: number): CacheEntry | null {
   for (let i = graphCache.length - 1; i >= 0; i--) {
     const c = graphCache[i];
     // Accept cache hit when requested bbox fits within the cached bbox
     if (s >= c.south && n <= c.north && w >= c.west && e <= c.east) {
       // Move to end (most-recently-used)
       graphCache.push(graphCache.splice(i, 1)[0]);
-      return c.graph;
+      return c;
     }
   }
   return null;
 }
 
-function setCachedGraph(s: number, n: number, w: number, e: number, graph: Graph): void {
+function setCachedEntry(s: number, n: number, w: number, e: number, graph: Graph, index: SpatialGrid): void {
   if (graphCache.length >= GRAPH_CACHE_MAX) {
     graphCache.shift(); // evict least-recently-used
   }
-  graphCache.push({ graph, south: s, north: n, west: w, east: e });
+  graphCache.push({ graph, index, south: s, north: n, west: w, east: e });
 }
 
 // ── Background pre-fetch promise ─────────────────────────────────────────────
@@ -95,7 +161,7 @@ export function prefetchAreaAround(center: LatLng, radiusDeg = 0.05): void {
   const e = center.lng + radiusDeg;
 
   // Skip if the area is already cached
-  if (getCachedGraph(s, n, w, e)) return;
+  if (getCachedEntry(s, n, w, e)) return;
 
   _prefetchPromise = (async () => {
     try {
@@ -115,7 +181,7 @@ async function _fetchAndCacheGraph(
   east: number,
   latSpan?: number,
   lngSpan?: number
-): Promise<Graph> {
+): Promise<{ graph: Graph; index: SpatialGrid }> {
   const effectiveLatSpan = latSpan ?? north - south;
   const effectiveLngSpan = lngSpan ?? east - west;
   const roadPattern = getRoadTypePattern(effectiveLatSpan, effectiveLngSpan);
@@ -201,8 +267,13 @@ async function _fetchAndCacheGraph(
 
   // Store with placeholder start/end (snapping happens per-query in buildOsmGraph)
   const graph: Graph = { nodes, startId: '', endId: '' };
-  setCachedGraph(south, north, west, east, graph);
-  return graph;
+  // Build spatial index for fast nearest-node lookup
+  const index = new SpatialGrid();
+  for (const [id, node] of nodes) {
+    index.add(id, node.position.lat, node.position.lng);
+  }
+  setCachedEntry(south, north, west, east, graph, index);
+  return { graph, index };
 }
 
 /**
@@ -240,42 +311,22 @@ export async function buildOsmGraph(start: LatLng, end: LatLng): Promise<Graph> 
   }
 
   // Check cache before hitting the API
-  const cached = getCachedGraph(south, north, west, east);
+  const cachedEntry = getCachedEntry(south, north, west, east);
   let graphNodes: Map<string, GraphNode>;
-  if (cached) {
-    graphNodes = cached.nodes;
+  let spatialIndex: SpatialGrid;
+
+  if (cachedEntry) {
+    graphNodes = cachedEntry.graph.nodes;
+    spatialIndex = cachedEntry.index;
   } else {
     const fetched = await _fetchAndCacheGraph(south, north, west, east, latSpan, lngSpan);
-    graphNodes = fetched.nodes;
+    graphNodes = fetched.graph.nodes;
+    spatialIndex = fetched.index;
   }
 
-  // Snap start and end to the nearest road node.
-  // Use squared Euclidean distance on lat/lng for comparison – it is much
-  // faster than haversine (no trig) and preserves the relative ordering
-  // needed to find the nearest node.
-  let startId = '';
-  let endId = '';
-  let minDistStart = Infinity;
-  let minDistEnd = Infinity;
-
-  for (const [id, node] of graphNodes) {
-    const dLatS = node.position.lat - start.lat;
-    const dLngS = node.position.lng - start.lng;
-    const ds = dLatS * dLatS + dLngS * dLngS;
-
-    const dLatE = node.position.lat - end.lat;
-    const dLngE = node.position.lng - end.lng;
-    const de = dLatE * dLatE + dLngE * dLngE;
-
-    if (ds < minDistStart) {
-      minDistStart = ds;
-      startId = id;
-    }
-    if (de < minDistEnd) {
-      minDistEnd = de;
-      endId = id;
-    }
-  }
+  // Snap start and end to the nearest road node using the spatial index.
+  const startId = spatialIndex.nearestId(start.lat, start.lng, graphNodes);
+  const endId   = spatialIndex.nearestId(end.lat,   end.lng,   graphNodes);
 
   if (!startId || !endId) {
     throw new Error('Could not snap start or end point to any road node. Try placing markers closer to a road.');
