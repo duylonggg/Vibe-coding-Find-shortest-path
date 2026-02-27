@@ -1,4 +1,5 @@
 import { buildOsmGraph, buildOsmGraphCorridor, prefetchAreaAround } from './osmGraphBuilder';
+import { haversine } from './graphBuilder';
 import type { LatLng, AlgorithmResult } from './types';
 import { bfs } from './bfs';
 import { dijkstra } from './dijkstra';
@@ -7,6 +8,9 @@ import { aStar } from './aStar';
 import { alt } from './alt';
 import { ch } from './ch';
 import { cch } from './cch';
+
+/** Straight-line distance (km) above which the auto mode switches to corridor loading. */
+const AUTO_CORRIDOR_THRESHOLD_KM = 222;
 
 // Minimal interface for the DedicatedWorkerGlobalScope APIs we use, avoiding
 // a full `/// <reference lib="webworker" />` which conflicts with the DOM lib.
@@ -17,7 +21,7 @@ interface WorkerContext {
 
 type InMessage =
   | { type: 'prefetch'; center: LatLng }
-  | { type: 'run'; start: LatLng; end: LatLng; algorithm: string; loadMode?: 'radius' | 'corridor' };
+  | { type: 'run'; start: LatLng; end: LatLng; algorithm: string; loadMode?: 'radius' | 'corridor' | 'auto' };
 
 type OutMessage =
   | { type: 'status'; message: string }
@@ -39,7 +43,7 @@ ctx.onmessage = async (e: MessageEvent<InMessage>) => {
     try {
       ctx.postMessage({ type: 'status', message: 'Loading road network…' });
 
-      const graph = loadMode === 'corridor'
+      const graph = loadMode === 'corridor' || (loadMode === 'auto' && haversine(start, end) > AUTO_CORRIDOR_THRESHOLD_KM)
         ? await buildOsmGraphCorridor(start, end)
         : await buildOsmGraph(start, end);
       ctx.postMessage({ type: 'status', message: `Road network loaded (${graph.nodes.size} nodes). Running algorithm…` });

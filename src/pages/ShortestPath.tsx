@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import MapView from '../components/MapView';
 import SearchBar from '../components/SearchBar';
 import Sidebar from '../components/Sidebar';
-import type { AlgorithmType } from '../components/Sidebar';
+import type { AlgorithmType, LoadMode } from '../components/Sidebar';
 import ProgressSlider from '../components/ProgressSlider';
 import DarkModeToggle from '../components/DarkModeToggle';
 import type { LatLng, AlgorithmResult } from '../Algorithm/types';
@@ -21,7 +21,7 @@ const ShortestPath: React.FC = () => {
   const [startPos, setStartPos] = useState<LatLng | null>(null);
   const [endPos, setEndPos] = useState<LatLng | null>(null);
   const [algorithm, setAlgorithm] = useState<AlgorithmType>('aStar');
-  const [loadMode, setLoadMode] = useState<'radius' | 'corridor'>('radius');
+  const [loadMode, setLoadMode] = useState<LoadMode>('auto');
   const [result, setResult] = useState<AlgorithmResult | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [mapCenter, setMapCenter] = useState<LatLng>(DEFAULT_CENTER);

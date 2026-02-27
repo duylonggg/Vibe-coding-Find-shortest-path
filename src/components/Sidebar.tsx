@@ -10,7 +10,7 @@ export type AlgorithmType =
   | 'ch'
   | 'cch';
 
-export type LoadMode = 'radius' | 'corridor';
+export type LoadMode = 'radius' | 'corridor' | 'auto';
 
 /** Maximum allowed bounding-box span in degrees (~222 km at equator). */
 const MAX_BOX_DEGREES = 2.0;
@@ -64,6 +64,7 @@ const algorithms: { value: AlgorithmType; label: string; description: string }[]
 ];
 
 const loadModes: { value: LoadMode; label: string; description: string }[] = [
+  { value: 'auto',     label: 'Auto (recommended)', description: 'Automatically handles short and long distances – just set start and end and the best strategy is chosen for you' },
   { value: 'radius',   label: 'Radius',   description: 'Loads the full rectangular area between start and end (max ~222 km)' },
   { value: 'corridor', label: 'Corridor', description: 'Loads only a narrow strip along the direct line – supports much longer distances' },
 ];
