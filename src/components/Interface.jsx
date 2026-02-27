@@ -5,6 +5,7 @@ import Slider from "./Slider";
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { INITIAL_COLORS, LOCATIONS } from "../config";
 import { arrayToRgb, rgbToArray } from "../helpers";
+import LocationAutocomplete from "./LocationAutocomplete";
 
 const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, isDark = false, onToggleDark, onSetStart, onSetEnd }, ref) => {
     const [sidebar, setSidebar] = useState(false);
@@ -28,54 +29,6 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
     const helperTime = useRef(4800);
     const rightDown = useRef(false);
     const leftDown = useRef(false);
-    const [startQuery, setStartQuery] = useState('');
-    const [endQuery, setEndQuery] = useState('');
-    const [startSearching, setStartSearching] = useState(false);
-    const [endSearching, setEndSearching] = useState(false);
-
-    async function geocodeQuery(query) {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
-        const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-        const data = await res.json();
-        if (data && data.length > 0) {
-            return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-        }
-        return null;
-    }
-
-    async function handleStartSearch() {
-        if (!startQuery.trim() || !onSetStart) return;
-        setStartSearching(true);
-        try {
-            const pos = await geocodeQuery(startQuery);
-            if (pos) {
-                onSetStart(pos.lat, pos.lng);
-            } else {
-                setSnack({ open: true, message: 'Start location not found.', type: 'error' });
-            }
-        } catch {
-            setSnack({ open: true, message: 'Start search failed.', type: 'error' });
-        } finally {
-            setStartSearching(false);
-        }
-    }
-
-    async function handleEndSearch() {
-        if (!endQuery.trim() || !onSetEnd) return;
-        setEndSearching(true);
-        try {
-            const pos = await geocodeQuery(endQuery);
-            if (pos) {
-                onSetEnd(pos.lat, pos.lng);
-            } else {
-                setSnack({ open: true, message: 'End location not found.', type: 'error' });
-            }
-        } catch {
-            setSnack({ open: true, message: 'End search failed.', type: 'error' });
-        } finally {
-            setEndSearching(false);
-        }
-    }
 
     // Expose showSnack to parent from ref
     useImperativeHandle(ref, () => ({
@@ -277,84 +230,20 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                         flexWrap: "wrap",
                     }}>
                         {onSetStart && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 220px", minWidth: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", color: isDark ? "#e2e8f0" : "#374151" }}>🟢 Start:</span>
-                                <input
-                                    type="text"
-                                    value={startQuery}
-                                    onChange={e => setStartQuery(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleStartSearch()}
-                                    placeholder="Search start location…"
-                                    style={{
-                                        flex: 1,
-                                        minWidth: 0,
-                                        padding: "4px 8px",
-                                        borderRadius: 5,
-                                        border: `1px solid ${isDark ? "#334155" : "#d1d5db"}`,
-                                        fontSize: 12,
-                                        background: isDark ? "#0f172a" : "#fff",
-                                        color: isDark ? "#e2e8f0" : "#374151",
-                                        outline: "none",
-                                    }}
-                                />
-                                <button
-                                    onClick={handleStartSearch}
-                                    disabled={startSearching}
-                                    style={{
-                                        padding: "4px 10px",
-                                        borderRadius: 5,
-                                        border: "none",
-                                        background: "#2563eb",
-                                        color: "#fff",
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: startSearching ? "not-allowed" : "pointer",
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    {startSearching ? "…" : "Go"}
-                                </button>
-                            </div>
+                            <LocationAutocomplete
+                                label="🟢 Start:"
+                                placeholder="Search start location…"
+                                onSelect={(lat, lng) => onSetStart(lat, lng)}
+                                isDark={isDark}
+                            />
                         )}
                         {onSetEnd && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4, flex: "1 1 220px", minWidth: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", color: isDark ? "#e2e8f0" : "#374151" }}>🔴 End:</span>
-                                <input
-                                    type="text"
-                                    value={endQuery}
-                                    onChange={e => setEndQuery(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleEndSearch()}
-                                    placeholder="Search end location…"
-                                    style={{
-                                        flex: 1,
-                                        minWidth: 0,
-                                        padding: "4px 8px",
-                                        borderRadius: 5,
-                                        border: `1px solid ${isDark ? "#334155" : "#d1d5db"}`,
-                                        fontSize: 12,
-                                        background: isDark ? "#0f172a" : "#fff",
-                                        color: isDark ? "#e2e8f0" : "#374151",
-                                        outline: "none",
-                                    }}
-                                />
-                                <button
-                                    onClick={handleEndSearch}
-                                    disabled={endSearching}
-                                    style={{
-                                        padding: "4px 10px",
-                                        borderRadius: 5,
-                                        border: "none",
-                                        background: "#2563eb",
-                                        color: "#fff",
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: endSearching ? "not-allowed" : "pointer",
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    {endSearching ? "…" : "Go"}
-                                </button>
-                            </div>
+                            <LocationAutocomplete
+                                label="🔴 End:"
+                                placeholder="Search end location…"
+                                onSelect={(lat, lng) => onSetEnd(lat, lng)}
+                                isDark={isDark}
+                            />
                         )}
                     </div>
                 )}
