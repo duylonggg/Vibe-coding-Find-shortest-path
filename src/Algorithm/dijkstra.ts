@@ -1,4 +1,5 @@
 import type { Graph, AlgorithmResult } from './types';
+import { MinHeap } from './minHeap';
 
 export function dijkstra(graph: Graph): AlgorithmResult {
   const { nodes, startId, endId } = graph;
@@ -11,12 +12,11 @@ export function dijkstra(graph: Graph): AlgorithmResult {
   dist.set(startId, 0);
   parent.set(startId, null);
 
-  // Simple priority queue via sorted array (adequate for 20x20 = 400 nodes)
-  const pq: { id: string; cost: number }[] = [{ id: startId, cost: 0 }];
+  const pq = new MinHeap();
+  pq.push(startId, 0);
 
-  while (pq.length > 0) {
-    pq.sort((a, b) => a.cost - b.cost);
-    const { id: current } = pq.shift()!;
+  while (pq.size > 0) {
+    const { id: current } = pq.pop()!;
 
     if (visited.has(current)) continue;
     visited.add(current);
@@ -31,7 +31,7 @@ export function dijkstra(graph: Graph): AlgorithmResult {
       if (newDist < dist.get(nodeId)!) {
         dist.set(nodeId, newDist);
         parent.set(nodeId, current);
-        pq.push({ id: nodeId, cost: newDist });
+        pq.push(nodeId, newDist);
       }
     }
   }

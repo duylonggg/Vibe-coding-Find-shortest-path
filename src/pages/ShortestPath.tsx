@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import MapView from '../components/MapView';
 import SearchBar from '../components/SearchBar';
 import Sidebar from '../components/Sidebar';
@@ -6,7 +6,7 @@ import type { AlgorithmType } from '../components/Sidebar';
 import ProgressSlider from '../components/ProgressSlider';
 import DarkModeToggle from '../components/DarkModeToggle';
 import type { LatLng, AlgorithmResult, Graph } from '../Algorithm/types';
-import { buildOsmGraph } from '../Algorithm/osmGraphBuilder';
+import { buildOsmGraph, prefetchAreaAround } from '../Algorithm/osmGraphBuilder';
 import { bfs } from '../Algorithm/bfs';
 import { dijkstra } from '../Algorithm/dijkstra';
 import { bidirectionalBfs } from '../Algorithm/bidirectionalBfs';
@@ -29,6 +29,10 @@ const ShortestPath: React.FC = () => {
   const [mapCenter, setMapCenter] = useState<LatLng>(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [status, setStatus] = useState('Place a START (right-click) and END (left-click) marker on the map.');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Ref to track latest prefetch request so stale results are dropped
+  const prefetchRef = useRef<{ startPos: LatLng; endPos: LatLng } | null>(null);
 
   // Toggle dark mode class on <html> element
   useEffect(() => {
@@ -56,9 +60,39 @@ const ShortestPath: React.FC = () => {
     }
   }, []);
 
+  // Pre-fetch graph data as soon as a start marker is placed so that the
+  // Overpass download is already in-flight (or cached) when the user clicks Run.
+  useEffect(() => {
+    if (startPos) {
+      prefetchAreaAround(startPos);
+    }
+  }, [startPos]);
+
+  // When both markers are placed, kick off a background graph fetch so that
+  // clicking Run will hit the cache instead of waiting for the network.
+  useEffect(() => {
+    if (!startPos || !endPos) return;
+    const snap = { startPos, endPos };
+    prefetchRef.current = snap;
+    setStatus('Road data loading in background… Click Run when ready.');
+    buildOsmGraph(startPos, endPos)
+      .then(() => {
+        // Only update status if this is still the current request
+        if (prefetchRef.current === snap) {
+          setStatus('Road data ready. Click Run to find the shortest path.');
+        }
+      })
+      .catch(() => {
+        if (prefetchRef.current === snap) {
+          setStatus('Place a START (right-click) and END (left-click) marker on the map.');
+        }
+      });
+  }, [startPos, endPos]);
+
   const handleRun = async () => {
     if (!startPos || !endPos) return;
-    setStatus('Fetching road data from OpenStreetMap…');
+    setIsLoading(true);
+    setStatus('Loading road network…');
     setResult(null);
     setOsmGraph(null);
     setCurrentStep(0);
@@ -92,15 +126,19 @@ const ShortestPath: React.FC = () => {
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : 'Failed to fetch road data.'}`);
       console.error(err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleClear = () => {
+    prefetchRef.current = null;
     setStartPos(null);
     setEndPos(null);
     setResult(null);
     setOsmGraph(null);
     setCurrentStep(0);
+    setIsLoading(false);
     setStatus('Place a START (right-click) and END (left-click) marker on the map.');
   };
 
@@ -156,6 +194,7 @@ const ShortestPath: React.FC = () => {
         canRun={!!startPos && !!endPos}
         status={status}
         isDark={isDark}
+        isLoading={isLoading}
       />
       <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} />
     </div>

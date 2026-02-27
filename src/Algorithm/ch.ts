@@ -1,4 +1,5 @@
 import type { Graph, AlgorithmResult } from './types';
+import { MinHeap } from './minHeap';
 
 interface Edge { to: string; weight: number; }
 
@@ -17,12 +18,12 @@ function witnessSearch(
 ): number {
   const dist = new Map<string, number>();
   dist.set(src, 0);
-  const pq: { id: string; cost: number }[] = [{ id: src, cost: 0 }];
+  const pq = new MinHeap();
+  pq.push(src, 0);
   const visited = new Set<string>();
 
-  while (pq.length > 0) {
-    pq.sort((a, b) => a.cost - b.cost);
-    const { id: cur, cost } = pq.shift()!;
+  while (pq.size > 0) {
+    const { id: cur, key: cost } = pq.pop()!;
     if (visited.has(cur)) continue;
     if (cost > maxCost) break;
     visited.add(cur);
@@ -34,7 +35,7 @@ function witnessSearch(
       const nd = cost + weight;
       if (nd <= maxCost && nd < (dist.get(to) ?? Infinity)) {
         dist.set(to, nd);
-        pq.push({ id: to, cost: nd });
+        pq.push(to, nd);
       }
     }
   }
@@ -132,17 +133,18 @@ export function ch(graph: Graph): AlgorithmResult {
   parentF.set(startId, null);
   parentB.set(endId, null);
 
-  const pqF: { id: string; cost: number }[] = [{ id: startId, cost: 0 }];
-  const pqB: { id: string; cost: number }[] = [{ id: endId, cost: 0 }];
+  const pqF = new MinHeap();
+  const pqB = new MinHeap();
+  pqF.push(startId, 0);
+  pqB.push(endId, 0);
 
   let bestDist = Infinity;
   let meetingNode: string | null = null;
 
-  while (pqF.length > 0 || pqB.length > 0) {
+  while (pqF.size > 0 || pqB.size > 0) {
     // Forward step: relax upward edges from start
-    if (pqF.length > 0) {
-      pqF.sort((a, b) => a.cost - b.cost);
-      const { id: cur, cost } = pqF.shift()!;
+    if (pqF.size > 0) {
+      const { id: cur, key: cost } = pqF.pop()!;
       if (!visitedF.has(cur) && cost <= bestDist) {
         visitedF.add(cur);
         exploredOrder.push(cur);
@@ -154,16 +156,15 @@ export function ch(graph: Graph): AlgorithmResult {
           if (nd < (distF.get(to) ?? Infinity)) {
             distF.set(to, nd);
             parentF.set(to, cur);
-            pqF.push({ id: to, cost: nd });
+            pqF.push(to, nd);
           }
         }
       }
     }
 
     // Backward step: relax downward edges (reversed = upward) from end
-    if (pqB.length > 0) {
-      pqB.sort((a, b) => a.cost - b.cost);
-      const { id: cur, cost } = pqB.shift()!;
+    if (pqB.size > 0) {
+      const { id: cur, key: cost } = pqB.pop()!;
       if (!visitedB.has(cur) && cost <= bestDist) {
         visitedB.add(cur);
         exploredOrder.push(cur);
@@ -175,7 +176,7 @@ export function ch(graph: Graph): AlgorithmResult {
           if (nd < (distB.get(to) ?? Infinity)) {
             distB.set(to, nd);
             parentB.set(to, cur);
-            pqB.push({ id: to, cost: nd });
+            pqB.push(to, nd);
           }
         }
       }

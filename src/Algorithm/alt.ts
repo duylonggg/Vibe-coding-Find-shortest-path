@@ -1,5 +1,6 @@
 import type { Graph, AlgorithmResult } from './types';
 import { haversine } from './graphBuilder';
+import { MinHeap } from './minHeap';
 
 /** Run single-source Dijkstra from `sourceId`, returning distances to all nodes. */
 function singleSourceDijkstra(nodes: Graph['nodes'], sourceId: string): Map<string, number> {
@@ -7,11 +8,11 @@ function singleSourceDijkstra(nodes: Graph['nodes'], sourceId: string): Map<stri
   for (const id of nodes.keys()) dist.set(id, Infinity);
   dist.set(sourceId, 0);
   const visited = new Set<string>();
-  const pq: { id: string; cost: number }[] = [{ id: sourceId, cost: 0 }];
+  const pq = new MinHeap();
+  pq.push(sourceId, 0);
 
-  while (pq.length > 0) {
-    pq.sort((a, b) => a.cost - b.cost);
-    const { id: cur } = pq.shift()!;
+  while (pq.size > 0) {
+    const { id: cur } = pq.pop()!;
     if (visited.has(cur)) continue;
     visited.add(cur);
     for (const { nodeId, weight } of nodes.get(cur)!.neighbors) {
@@ -19,7 +20,7 @@ function singleSourceDijkstra(nodes: Graph['nodes'], sourceId: string): Map<stri
       const nd = dist.get(cur)! + weight;
       if (nd < dist.get(nodeId)!) {
         dist.set(nodeId, nd);
-        pq.push({ id: nodeId, cost: nd });
+        pq.push(nodeId, nd);
       }
     }
   }
@@ -86,14 +87,15 @@ export function alt(graph: Graph): AlgorithmResult {
     fScore.set(id, Infinity);
   }
   gScore.set(startId, 0);
-  fScore.set(startId, h(startId));
+  const startF = h(startId);
+  fScore.set(startId, startF);
   parent.set(startId, null);
 
-  const open: string[] = [startId];
+  const open = new MinHeap();
+  open.push(startId, startF);
 
-  while (open.length > 0) {
-    open.sort((a, b) => fScore.get(a)! - fScore.get(b)!);
-    const cur = open.shift()!;
+  while (open.size > 0) {
+    const { id: cur } = open.pop()!;
     if (visited.has(cur)) continue;
     visited.add(cur);
     exploredOrder.push(cur);
@@ -104,9 +106,10 @@ export function alt(graph: Graph): AlgorithmResult {
       const tg = gScore.get(cur)! + weight;
       if (tg < gScore.get(nodeId)!) {
         gScore.set(nodeId, tg);
-        fScore.set(nodeId, tg + h(nodeId));
+        const f = tg + h(nodeId);
+        fScore.set(nodeId, f);
         parent.set(nodeId, cur);
-        open.push(nodeId);
+        open.push(nodeId, f);
       }
     }
   }

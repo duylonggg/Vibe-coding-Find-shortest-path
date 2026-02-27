@@ -1,5 +1,6 @@
 import type { Graph, AlgorithmResult } from './types';
 import { haversine } from './graphBuilder';
+import { MinHeap } from './minHeap';
 
 export function aStar(graph: Graph): AlgorithmResult {
   const { nodes, startId, endId } = graph;
@@ -17,15 +18,15 @@ export function aStar(graph: Graph): AlgorithmResult {
     fScore.set(id, Infinity);
   }
   gScore.set(startId, 0);
-  fScore.set(startId, haversine(nodes.get(startId)!.position, endPos));
+  const startH = haversine(nodes.get(startId)!.position, endPos);
+  fScore.set(startId, startH);
   parent.set(startId, null);
 
-  const open: string[] = [startId];
+  const open = new MinHeap();
+  open.push(startId, startH);
 
-  while (open.length > 0) {
-    // Pick node with lowest fScore
-    open.sort((a, b) => fScore.get(a)! - fScore.get(b)!);
-    const current = open.shift()!;
+  while (open.size > 0) {
+    const { id: current } = open.pop()!;
 
     if (visited.has(current)) continue;
     visited.add(current);
@@ -38,9 +39,10 @@ export function aStar(graph: Graph): AlgorithmResult {
       const tentative = gScore.get(current)! + weight;
       if (tentative < gScore.get(nodeId)!) {
         gScore.set(nodeId, tentative);
-        fScore.set(nodeId, tentative + haversine(nodes.get(nodeId)!.position, endPos));
+        const f = tentative + haversine(nodes.get(nodeId)!.position, endPos);
+        fScore.set(nodeId, f);
         parent.set(nodeId, current);
-        open.push(nodeId);
+        open.push(nodeId, f);
       }
     }
   }

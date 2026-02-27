@@ -92,8 +92,10 @@ const MapView: React.FC<MapViewProps> = ({
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        updateWhenIdle={true}
-        keepBuffer={1}
+        updateWhenIdle={false}
+        keepBuffer={4}
+        maxNativeZoom={19}
+        maxZoom={19}
       />
 
       <FlyTo center={center} zoom={zoom} />

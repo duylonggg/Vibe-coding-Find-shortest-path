@@ -17,6 +17,7 @@ interface SidebarProps {
   canRun: boolean;
   status: string;
   isDark?: boolean;
+  isLoading?: boolean;
 }
 
 const algorithms: { value: AlgorithmType; label: string; description: string }[] = [
@@ -37,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   canRun,
   status,
   isDark = false,
+  isLoading = false,
 }) => {
   const bg = isDark ? '#1e293b' : '#ffffff';
   const textPrimary = isDark ? '#e2e8f0' : '#1e3a5f';
@@ -88,20 +90,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <button
         onClick={onRun}
-        disabled={!canRun}
+        disabled={!canRun || isLoading}
         style={{
           padding: '8px 0',
           borderRadius: 6,
           border: 'none',
-          background: canRun ? '#2563eb' : (isDark ? '#1e3a5f' : '#93c5fd'),
+          background: canRun && !isLoading ? '#2563eb' : (isDark ? '#1e3a5f' : '#93c5fd'),
           color: 'white',
-          cursor: canRun ? 'pointer' : 'not-allowed',
+          cursor: canRun && !isLoading ? 'pointer' : 'not-allowed',
           fontWeight: 700,
           fontSize: 14,
           transition: 'background 0.4s ease',
         }}
       >
-        ▶ Run Algorithm
+        {isLoading ? '⏳ Loading…' : '▶ Run Algorithm'}
       </button>
 
       <button
