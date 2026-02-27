@@ -4,6 +4,7 @@ import SearchBar from '../components/SearchBar';
 import Sidebar from '../components/Sidebar';
 import type { AlgorithmType } from '../components/Sidebar';
 import ProgressSlider from '../components/ProgressSlider';
+import DarkModeToggle from '../components/DarkModeToggle';
 import type { LatLng, AlgorithmResult, Graph } from '../Algorithm/types';
 import { buildOsmGraph } from '../Algorithm/osmGraphBuilder';
 import { bfs } from '../Algorithm/bfs';
@@ -18,6 +19,7 @@ const DEFAULT_CENTER: LatLng = { lat: 20, lng: 0 };
 const DEFAULT_ZOOM = 5;
 
 const ShortestPath: React.FC = () => {
+  const [isDark, setIsDark] = useState(false);
   const [startPos, setStartPos] = useState<LatLng | null>(null);
   const [endPos, setEndPos] = useState<LatLng | null>(null);
   const [algorithm, setAlgorithm] = useState<AlgorithmType>('aStar');
@@ -27,6 +29,15 @@ const ShortestPath: React.FC = () => {
   const [mapCenter, setMapCenter] = useState<LatLng>(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [status, setStatus] = useState('Place a START (right-click) and END (left-click) marker on the map.');
+
+  // Toggle dark mode class on <html> element
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
 
   // Get user geolocation on mount
   useEffect(() => {
@@ -130,11 +141,12 @@ const ShortestPath: React.FC = () => {
         center={mapCenter}
         zoom={mapZoom}
       />
-      <SearchBar onLocationFound={handleLocationFound} />
+      <SearchBar onLocationFound={handleLocationFound} isDark={isDark} />
       <ProgressSlider
         steps={steps}
         currentStep={currentStep}
         onStepChange={setCurrentStep}
+        isDark={isDark}
       />
       <Sidebar
         algorithm={algorithm}
@@ -143,7 +155,9 @@ const ShortestPath: React.FC = () => {
         onClear={handleClear}
         canRun={!!startPos && !!endPos}
         status={status}
+        isDark={isDark}
       />
+      <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} />
     </div>
   );
 };

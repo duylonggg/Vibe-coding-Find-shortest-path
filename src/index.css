@@ -7,4 +7,54 @@ body {
   padding: 0;
   overflow: hidden;
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #f5f5f5;
+  transition: background-color 0.5s ease;
+}
+
+html.dark body {
+  background-color: #0f172a;
+}
+
+/* Smooth dark/light mode transition for panels */
+html.dark .leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.95);
+  transition: filter 0.5s ease;
+}
+
+.leaflet-tile {
+  transition: filter 0.5s ease;
+}
+
+/* Smooth transition for the marker/path layers (keep them from being inverted) */
+html.dark .leaflet-marker-pane,
+html.dark .leaflet-overlay-pane {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Dark mode toggle icon animation */
+.toggle-icon {
+  display: inline-block;
+  transition: transform 0.5s ease, opacity 0.4s ease;
+  line-height: 1;
+}
+
+.toggle-icon.light {
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+}
+
+.toggle-icon.dark {
+  transform: rotate(-20deg) scale(1);
+  opacity: 1;
+}
+
+/* Pulse animation on toggle */
+@keyframes toggle-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.dark-mode-toggle:active .toggle-icon {
+  animation: toggle-pulse 0.4s ease forwards;
 }

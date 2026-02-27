@@ -1,6 +1,9 @@
 // Use CARTO Positron for a clean white/light map style
 export const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
+// Use CARTO Dark Matter for dark mode
+export const MAP_STYLE_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
 export const INITIAL_VIEW_STATE = {
     longitude: -0.127,
     latitude:  51.507,

@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "re
 import { INITIAL_COLORS, LOCATIONS } from "../config";
 import { arrayToRgb, rgbToArray } from "../helpers";
 
-const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation }, ref) => {
+const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, isDark = false, onToggleDark }, ref) => {
     const [sidebar, setSidebar] = useState(false);
     const [snack, setSnack] = useState({
         open: false,
@@ -87,6 +87,15 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
         }
         else if(e.code === "KeyR" && (animationEnded || !started)) clearPath();
     };
+
+    // Toggle dark mode class on document
+    useEffect(() => {
+        if (isDark) {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
+    }, [isDark]);
 
     // Show cinematic mode helper
     useEffect(() => {
@@ -424,6 +433,18 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     {animationEnded ? <Replay /> : playbackOn ? <Pause /> : <PlayArrow />}
                 </IconButton>
             </div>
+
+            <Tooltip title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                <button
+                    onClick={onToggleDark}
+                    aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                    className="dark-mode-toggle"
+                >
+                    <span className={`toggle-icon ${isDark ? "dark" : "light"}`}>
+                        {isDark ? "🌙" : "☀️"}
+                    </span>
+                </button>
+            </Tooltip>
         </>
     );
 });
