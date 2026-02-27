@@ -413,6 +413,37 @@ html.dark .nav-top .slider-container {
 html.dark .sidebar-container {
     background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
     transition: background 0.5s ease;
+    color: #e2e8f0;
+}
+
+/* Dark mode – MUI Select dropdown menu paper */
+html.dark .MuiMenu-paper,
+html.dark .MuiPopover-paper {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+html.dark .MuiMenuItem-root {
+    color: #e2e8f0;
+}
+
+html.dark .MuiMenuItem-root:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Dark mode – MUI OutlinedInput border */
+html.dark .sidebar-container .MuiOutlinedInput-notchedOutline {
+    border-color: #334155 !important;
+}
+
+/* Dark mode – MUI InputLabel */
+html.dark .sidebar-container .MuiInputLabel-root {
+    color: #cbd5e1;
+}
+
+/* Dark mode – MUI Select icon */
+html.dark .sidebar-container .MuiSvgIcon-root {
+    color: #cbd5e1;
 }
 
 /* Dark mode – attrib container */
