@@ -8,6 +8,13 @@ import { arrayToRgb, rgbToArray } from "../helpers";
 
 const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, isDark = false, onToggleDark }, ref) => {
     const [sidebar, setSidebar] = useState(false);
+    const sidebarBg = isDark ? '#1e293b' : undefined;
+    const sidebarText = isDark ? '#e2e8f0' : '#222';
+    const sidebarMuted = isDark ? '#94a3b8' : '#888';
+    const sidebarLabel = isDark ? '#cbd5e1' : '#555';
+    const sidebarInputBg = isDark ? '#0f172a' : '#f5f5f5';
+    const sidebarBtnBg = isDark ? '#334155' : '#f0f0f0';
+    const sidebarBtnColor = isDark ? '#e2e8f0' : '#333';
     const [snack, setSnack] = useState({
         open: false,
         message: "",
@@ -290,20 +297,21 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                 open={sidebar}
                 onClose={() => setSidebar(false)}
                 className={`side-drawer ${cinematic ? "cinematic" : ""}`}
+                PaperProps={{ style: sidebarBg ? { backgroundColor: sidebarBg } : undefined }}
             >
                 <div className="sidebar-container">
-                    <Typography variant="h6" style={{ color: "#222" }}>
+                    <Typography variant="h6" style={{ color: sidebarText }}>
                         Settings
                     </Typography>
 
                     <FormControl fullWidth>
-                        <InputLabel id="algo-label" style={{ color: "#555" }}>Algorithm</InputLabel>
+                        <InputLabel id="algo-label" style={{ color: sidebarLabel }}>Algorithm</InputLabel>
                         <Select
                             labelId="algo-label"
                             value={settings.algorithm}
                             label="Algorithm"
                             onChange={e => changeAlgorithm(e.target.value)}
-                            style={{ backgroundColor: "#f5f5f5", color: "#222" }}
+                            style={{ backgroundColor: sidebarInputBg, color: sidebarText }}
                         >
                             <MenuItem value="astar">A* (A-Star)</MenuItem>
                             <MenuItem value="dijkstra">Dijkstra</MenuItem>
@@ -317,7 +325,7 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     </FormControl>
 
                     <div>
-                        <Typography id="speed-label" style={{ color: "#555", fontSize: 14 }}>
+                        <Typography id="speed-label" style={{ color: sidebarLabel, fontSize: 14 }}>
                             Animation speed: {settings.speed}
                         </Typography>
                         <Slider
@@ -331,7 +339,7 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     </div>
 
                     <div>
-                        <Typography id="radius-label" style={{ color: "#555", fontSize: 14 }}>
+                        <Typography id="radius-label" style={{ color: sidebarLabel, fontSize: 14 }}>
                             Search radius: {settings.radius} km
                         </Typography>
                         <Slider
@@ -345,7 +353,7 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     </div>
 
                     <div className="styles-container">
-                        <Typography style={{ color: "#888", textTransform: "uppercase", fontSize: 13 }}>
+                        <Typography style={{ color: sidebarMuted, textTransform: "uppercase", fontSize: 13 }}>
                             Colors
                         </Typography>
 
@@ -358,19 +366,19 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                             { label: "Shortest route color", key: "route" },
                         ].map(({ label, key }) => (
                             <div key={key}>
-                                <Typography style={{ color: "#555", fontSize: 13 }}>{label}</Typography>
+                                <Typography style={{ color: sidebarLabel, fontSize: 13 }}>{label}</Typography>
                                 <div className="color-container">
                                     <MuiColorInput
                                         value={arrayToRgb(colors[key])}
                                         onChange={v => setColors({ ...colors, [key]: rgbToArray(v) })}
-                                        style={{ backgroundColor: "#f5f5f5" }}
+                                        style={{ backgroundColor: sidebarInputBg }}
                                     />
                                     <IconButton
                                         onClick={() => setColors({ ...colors, [key]: INITIAL_COLORS[key] })}
                                         style={{ backgroundColor: "transparent" }}
                                         size="small"
                                     >
-                                        <Replay style={{ color: "#555", width: 20, height: 20 }} fontSize="inherit" />
+                                        <Replay style={{ color: sidebarLabel, width: 20, height: 20 }} fontSize="inherit" />
                                     </IconButton>
                                 </div>
                             </div>
@@ -378,16 +386,16 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     </div>
 
                     <div className="shortcuts-container">
-                        <Typography style={{ color: "#888", textTransform: "uppercase", fontSize: 13 }}>
+                        <Typography style={{ color: sidebarMuted, textTransform: "uppercase", fontSize: 13 }}>
                             Shortcuts
                         </Typography>
-                        <div className="shortcut"><p>SPACE</p><p>Start/Stop animation</p></div>
-                        <div className="shortcut"><p>R</p><p>Clear path</p></div>
-                        <div className="shortcut"><p>Arrows</p><p>Animation playback</p></div>
+                        <div className="shortcut" style={{ color: sidebarLabel }}><p>SPACE</p><p>Start/Stop animation</p></div>
+                        <div className="shortcut" style={{ color: sidebarLabel }}><p>R</p><p>Clear path</p></div>
+                        <div className="shortcut" style={{ color: sidebarLabel }}><p>Arrows</p><p>Animation playback</p></div>
                         <Button
                             onClick={() => { setActiveStep(0); setShowTutorial(true); }}
                             variant="contained"
-                            style={{ backgroundColor: "#f0f0f0", color: "#333", marginTop: 8 }}
+                            style={{ backgroundColor: sidebarBtnBg, color: sidebarBtnColor, marginTop: 8 }}
                         >
                             Show tutorial
                         </Button>
