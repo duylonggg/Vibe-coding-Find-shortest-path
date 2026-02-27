@@ -1,6 +1,6 @@
 # Vibe-coding-Find-shortest-map
 
-Dự án vibe coding tìm đường đi ngắn nhất giữa 2 điểm bất kỳ được đánh dấu trên bản đồ thế giới 🌏
+Dự án vibe coding tìm đường đi ngắn nhất giữa 2 điểm bất kỳ được đánh dấu trên bản đồ thế giới nằm trong bán kính nhất định 🌏
 
 ## Features
 
