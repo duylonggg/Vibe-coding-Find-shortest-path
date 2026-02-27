@@ -178,6 +178,10 @@ const ShortestPath: React.FC = () => {
         status={status}
         isDark={isDark}
         isLoading={isLoading}
+        startPos={startPos}
+        endPos={endPos}
+        onSetStart={setStartPos}
+        onSetEnd={setEndPos}
       />
       <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} />
     </div>

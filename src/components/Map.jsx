@@ -12,6 +12,18 @@ import Interface from "./Interface";
 import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE, MAP_STYLE_DARK } from "../config";
 import useSmoothStateChange from "../hooks/useSmoothStateChange";
 
+/** Haversine distance in km between two {lat, lon} points. */
+function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lon - a.lon) * Math.PI / 180;
+    const s =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
+        Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
 function Map({ isDark = false, onToggleDark }) {
     const [startNode, setStartNode] = useState(null);
     const [endNode, setEndNode] = useState(null);
@@ -248,6 +260,77 @@ function Map({ isDark = false, onToggleDark }) {
         }
     }
 
+    async function setStartByCoords(lat, lng) {
+        if(started && !animationEnded) return;
+        setFadeRadiusReverse(false);
+        fadeRadius.current = true;
+        clearPath();
+
+        const loadingHandle = setTimeout(() => setLoading(true), 300);
+        const node = await getNearestNode(lat, lng);
+        if(!node) {
+            ui.current.showSnack("No road found near this location, please try another.", "error");
+            clearTimeout(loadingHandle);
+            setLoading(false);
+            return;
+        }
+
+        setStartNode(node);
+        setEndNode(null);
+        const circle = createGeoJSONCircle([node.lon, node.lat], settings.radius);
+        setSelectionRadius([{ contour: circle }]);
+        changeLocation({ lat: node.lat, lon: node.lon });
+
+        getMapGraph(getBoundingBoxFromPolygon(circle), node.id).then(graph => {
+            state.current.graph = graph;
+            clearPath();
+            clearTimeout(loadingHandle);
+            setLoading(false);
+        });
+    }
+
+    async function setEndByCoords(lat, lng) {
+        if(!startNode) {
+            ui.current.showSnack("Please set a start point first.", "info");
+            return;
+        }
+        if(started && !animationEnded) return;
+        if(loading) {
+            ui.current.showSnack("Please wait for data to load.", "info");
+            return;
+        }
+
+        const dist = haversineKm(startNode, { lat, lon: lng });
+        if(dist > settings.radius) {
+            ui.current.showSnack(
+                `End point is ${dist.toFixed(1)} km from start, outside the search radius (${settings.radius} km). ` +
+                `Increase the radius in the Settings panel or choose a closer location.`,
+                "warning"
+            );
+            return;
+        }
+
+        const loadingHandle = setTimeout(() => setLoading(true), 300);
+        const node = await getNearestNode(lat, lng);
+        if(!node) {
+            ui.current.showSnack("No road found near this location, please try another.", "error");
+            clearTimeout(loadingHandle);
+            setLoading(false);
+            return;
+        }
+
+        const realEndNode = state.current.getNode(node.id);
+        setEndNode(node);
+        clearTimeout(loadingHandle);
+        setLoading(false);
+
+        if(!realEndNode) {
+            ui.current.showSnack("End point is not connected to the road network. Try another location.", "error");
+            return;
+        }
+        state.current.endNode = realEndNode;
+    }
+
     useEffect(() => {
         if(!started) return;
         requestRef.current = requestAnimationFrame(animate);
@@ -351,6 +434,8 @@ function Map({ isDark = false, onToggleDark }) {
                 changeRadius={changeRadius}
                 isDark={isDark}
                 onToggleDark={onToggleDark}
+                onSetStart={setStartByCoords}
+                onSetEnd={setEndByCoords}
             />
             <div className="attrib-container">
                 <div className="maplibregl-ctrl-attrib-inner">
