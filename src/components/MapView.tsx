@@ -61,11 +61,22 @@ function FlyTo({ center, zoom }: FlyToProps) {
   return null;
 }
 
+/** A single rendered route: positions + display style. */
+export interface RouteLayer {
+  positions: LatLng[];
+  color: string;
+  weight: number;
+  opacity: number;
+}
+
 interface MapViewProps {
   startPos: LatLng | null;
   endPos: LatLng | null;
   exploredPositions: LatLng[];
-  pathPositions: LatLng[];
+  /** Multiple routes to render.  Index 0 = primary (red), 1-2 = alternatives (purple). */
+  routes: RouteLayer[];
+  /** Index of the currently active (highlighted) route. */
+  activeRouteIndex: number;
   onSetStart: (pos: LatLng) => void;
   onSetEnd: (pos: LatLng) => void;
   center: LatLng;
@@ -76,12 +87,19 @@ const MapView: React.FC<MapViewProps> = ({
   startPos,
   endPos,
   exploredPositions,
-  pathPositions,
+  routes,
+  activeRouteIndex,
   onSetStart,
   onSetEnd,
   center,
   zoom,
 }) => {
+  // Render non-active routes first (underneath), active route last (on top)
+  const sortedRoutes = [
+    ...routes.map((r, i) => ({ ...r, origIndex: i })).filter((r) => r.origIndex !== activeRouteIndex),
+    ...(routes[activeRouteIndex] ? [{ ...routes[activeRouteIndex], origIndex: activeRouteIndex }] : []),
+  ];
+
   return (
     <MapContainer
       center={[center.lat, center.lng]}
@@ -110,11 +128,18 @@ const MapView: React.FC<MapViewProps> = ({
 
       <ExploredCanvasLayer positions={exploredPositions} />
 
-      {pathPositions.length > 1 && (
-        <Polyline
-          positions={pathPositions.map((p) => [p.lat, p.lng])}
-          pathOptions={{ color: '#16a34a', weight: 4, opacity: 0.9 }}
-        />
+      {sortedRoutes.map((route) =>
+        route.positions.length > 1 ? (
+          <Polyline
+            key={route.origIndex}
+            positions={route.positions.map((p) => [p.lat, p.lng])}
+            pathOptions={{
+              color: route.color,
+              weight: route.weight,
+              opacity: route.opacity,
+            }}
+          />
+        ) : null
       )}
     </MapContainer>
   );

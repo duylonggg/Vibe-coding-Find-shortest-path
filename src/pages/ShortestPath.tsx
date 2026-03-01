@@ -1,19 +1,41 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import MapView from '../components/MapView';
+import type { RouteLayer } from '../components/MapView';
 import SearchBar from '../components/SearchBar';
 import Sidebar from '../components/Sidebar';
 import type { AlgorithmType, LoadMode } from '../components/Sidebar';
 import ProgressSlider from '../components/ProgressSlider';
 import DarkModeToggle from '../components/DarkModeToggle';
+import DistancePanel from '../components/DistancePanel';
+import type { RouteInfo } from '../components/DistancePanel';
 import type { LatLng, AlgorithmResult } from '../Algorithm/types';
 
 const DEFAULT_CENTER: LatLng = { lat: 20, lng: 0 };
 const DEFAULT_ZOOM = 5;
 
+// Route colours: index 0 = primary (red), 1+ = alternatives (purple)
+const ROUTE_COLORS = ['#dc2626', '#9333ea', '#9333ea'];
+// Route weight: active route is thicker
+const ROUTE_WEIGHT_ACTIVE = 5;
+const ROUTE_WEIGHT_INACTIVE = 3;
+const ROUTE_OPACITY_ACTIVE = 0.95;
+const ROUTE_OPACITY_INACTIVE = 0.55;
+
+// Algorithm display names for the distance panel
+const ALGO_LABELS: Record<string, string> = {
+  bfs:              'BFS',
+  dijkstra:         'Dijkstra',
+  bidirectionalBfs: 'Bidirectional BFS',
+  aStar:            'A*',
+  alt:              'ALT (A* + Landmarks)',
+  ch:               'CH',
+  cch:              'CCH',
+};
+
 // Messages the worker can send back to the main thread
 type WorkerOutMessage =
   | { type: 'status'; message: string }
-  | { type: 'result'; exploredOrder: string[]; path: string[]; nodePositions: Record<string, LatLng> }
+  | { type: 'result'; exploredOrder: string[]; path: string[]; paths: string[][]; distances: number[]; nodePositions: Record<string, LatLng> }
   | { type: 'error'; message: string };
 
 const ShortestPath: React.FC = () => {
@@ -28,6 +50,11 @@ const ShortestPath: React.FC = () => {
   const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const [status, setStatus] = useState('Place a START (right-click) and END (left-click) marker on the map.');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Multi-path state (from Yen's K=3)
+  const [routePaths, setRoutePaths] = useState<string[][]>([]);
+  const [routeDistances, setRouteDistances] = useState<number[]>([]);
+  const [activeRouteIndex, setActiveRouteIndex] = useState(0);
 
   // Node positions (flat id → LatLng lookup) received from the worker.
   // Stored separately from the full graph so the heavy neighbor data stays in
@@ -48,14 +75,17 @@ const ShortestPath: React.FC = () => {
       if (msg.type === 'status') {
         setStatus(msg.message);
       } else if (msg.type === 'result') {
-        // React 18 batches these two setState calls into a single re-render
         setNodePositions(msg.nodePositions);
         const res: AlgorithmResult = { exploredOrder: msg.exploredOrder, path: msg.path };
         setResult(res);
         setCurrentStep(res.exploredOrder.length - 1);
+        setRoutePaths(msg.paths ?? (msg.path.length > 0 ? [msg.path] : []));
+        setRouteDistances(msg.distances ?? []);
+        setActiveRouteIndex(0);
         setIsLoading(false);
-        if (res.path.length > 0) {
-          setStatus(`Done! Explored ${res.exploredOrder.length} nodes. Path: ${res.path.length} nodes.`);
+        if (msg.path.length > 0) {
+          const count = msg.paths?.length ?? 1;
+          setStatus(`Done! Explored ${res.exploredOrder.length} nodes. Found ${count} route${count !== 1 ? 's' : ''}.`);
         } else {
           setStatus('No path found. The locations may not be connected by roads.');
         }
@@ -120,6 +150,9 @@ const ShortestPath: React.FC = () => {
     setResult(null);
     setNodePositions({});
     setCurrentStep(0);
+    setRoutePaths([]);
+    setRouteDistances([]);
+    setActiveRouteIndex(0);
     workerRef.current.postMessage({ type: 'run', start: startPos, end: endPos, algorithm, loadMode });
   };
 
@@ -129,6 +162,9 @@ const ShortestPath: React.FC = () => {
     setResult(null);
     setNodePositions({});
     setCurrentStep(0);
+    setRoutePaths([]);
+    setRouteDistances([]);
+    setActiveRouteIndex(0);
     setIsLoading(false);
     setStatus('Place a START (right-click) and END (left-click) marker on the map.');
   };
@@ -147,14 +183,33 @@ const ShortestPath: React.FC = () => {
       .filter((p): p is LatLng => p !== undefined);
   }, [result, currentStep, nodePositions]);
 
-  // Show path only when slider is at the last step
-  const pathPositions = useMemo<LatLng[]>(() => {
-    if (!result || result.path.length === 0) return [];
-    if (currentStep < result.exploredOrder.length - 1) return [];
-    return result.path
-      .map((id) => nodePositions[id])
-      .filter((p): p is LatLng => p !== undefined);
-  }, [result, currentStep, nodePositions]);
+  // Build route layers for MapView. Routes are only shown at the last step.
+  const routeLayers = useMemo<RouteLayer[]>(() => {
+    if (!result || currentStep < result.exploredOrder.length - 1) return [];
+    return routePaths.map((path, idx) => {
+      const positions = path
+        .map((id) => nodePositions[id])
+        .filter((p): p is LatLng => p !== undefined);
+      const isActive = idx === activeRouteIndex;
+      const color = ROUTE_COLORS[idx] ?? '#9333ea';
+      return {
+        positions,
+        color,
+        weight: isActive ? ROUTE_WEIGHT_ACTIVE : ROUTE_WEIGHT_INACTIVE,
+        opacity: isActive ? ROUTE_OPACITY_ACTIVE : ROUTE_OPACITY_INACTIVE,
+      };
+    });
+  }, [result, currentStep, routePaths, nodePositions, activeRouteIndex]);
+
+  // Build distance panel data
+  const panelRoutes = useMemo<RouteInfo[]>(() => {
+    if (routePaths.length === 0) return [];
+    return routePaths.map((_, idx) => ({
+      label: idx === 0 ? 'Shortest route' : `Alternative ${idx}`,
+      distanceKm: routeDistances[idx] ?? 0,
+      algorithmName: idx === 0 ? (ALGO_LABELS[algorithm] ?? algorithm) : 'Dijkstra (Yen\'s)',
+    }));
+  }, [routePaths, routeDistances, algorithm]);
 
   const steps = result ? result.exploredOrder.length : 0;
 
@@ -164,7 +219,8 @@ const ShortestPath: React.FC = () => {
         startPos={startPos}
         endPos={endPos}
         exploredPositions={exploredPositions}
-        pathPositions={pathPositions}
+        routes={routeLayers}
+        activeRouteIndex={activeRouteIndex}
         onSetStart={setStartPos}
         onSetEnd={setEndPos}
         center={mapCenter}
@@ -194,6 +250,14 @@ const ShortestPath: React.FC = () => {
         onSetEnd={setEndPos}
       />
       <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} />
+      {panelRoutes.length > 0 && (
+        <DistancePanel
+          routes={panelRoutes}
+          activeIndex={activeRouteIndex}
+          onSelectRoute={setActiveRouteIndex}
+          isDark={isDark}
+        />
+      )}
     </div>
   );
 };

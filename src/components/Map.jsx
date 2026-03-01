@@ -173,7 +173,7 @@ function buildKRoutes(graph, startNode, endNode, algorithm, k = 3) {
             coordinates: candidateNodes.map((node) => [node.longitude, node.latitude]),
             distanceKm: computePathDistanceKm(candidateNodes),
             label: `Route #${routes.length + 1}`,
-            algorithm: "Penalty reroute",
+            algorithm: "Alternative (penalty reroute)",
         });
         console.log(`[k-routes] penalty=${penalty} accepted in ${(t1 - t0).toFixed(0)}ms`);
     }

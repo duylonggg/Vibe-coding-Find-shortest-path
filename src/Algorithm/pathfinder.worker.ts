@@ -8,6 +8,7 @@ import { aStar } from './aStar';
 import { alt } from './alt';
 import { ch } from './ch';
 import { cch } from './cch';
+import { yenKShortestPaths, computePathDistanceKm } from './yenKSP';
 
 /** Straight-line distance (km) above which the auto mode switches to corridor loading.
  *  Lowered from 222 km to 30 km: corridor-based fetching fetches only roads within a
@@ -28,7 +29,7 @@ type InMessage =
 
 type OutMessage =
   | { type: 'status'; message: string }
-  | { type: 'result'; exploredOrder: string[]; path: string[]; nodePositions: Record<string, LatLng> }
+  | { type: 'result'; exploredOrder: string[]; path: string[]; paths: string[][]; distances: number[]; nodePositions: Record<string, LatLng> }
   | { type: 'error'; message: string };
 
 const ctx = self as unknown as WorkerContext;
@@ -74,16 +75,36 @@ ctx.onmessage = async (e: MessageEvent<InMessage>) => {
       const tAlgo1 = performance.now();
       console.log(`[worker] algorithm ${algorithm} finished in ${(tAlgo1 - tAlgo0).toFixed(0)}ms, explored: ${res.exploredOrder.length}, path: ${res.path.length}`);
 
-      // Serialize only the node positions needed for rendering – nodes in
-      // exploredOrder and path – keeping the full graph out of React state.
-      const neededIds = new Set([...res.exploredOrder, ...res.path]);
+      // ── K=3 shortest paths via Yen's algorithm ──────────────────────────
+      ctx.postMessage({ type: 'status', message: 'Computing alternative routes…' });
+      const tYen0 = performance.now();
+      const kPaths = yenKShortestPaths(graph, 3);
+      const tYen1 = performance.now();
+      console.log(`[worker] Yen K=3 in ${(tYen1 - tYen0).toFixed(0)}ms, found ${kPaths.length} paths`);
+
+      const paths    = kPaths.map((p) => p.path);
+      const distances = kPaths.map((p) => computePathDistanceKm(p.path, graph.nodes));
+
+      // Serialize only the node positions needed for rendering – explored nodes
+      // and all path nodes – keeping the full graph out of React state.
+      const neededIds = new Set([...res.exploredOrder, ...paths.flat()]);
       const nodePositions: Record<string, LatLng> = {};
       for (const id of neededIds) {
         const node = graph.nodes.get(id);
         if (node) nodePositions[id] = node.position;
       }
 
-      ctx.postMessage({ type: 'result', exploredOrder: res.exploredOrder, path: res.path, nodePositions });
+      // Primary path for backward-compatible `path` field
+      const primaryPath = paths.length > 0 ? paths[0] : res.path;
+
+      ctx.postMessage({
+        type: 'result',
+        exploredOrder: res.exploredOrder,
+        path: primaryPath,
+        paths,
+        distances,
+        nodePositions,
+      });
     } catch (err) {
       ctx.postMessage({ type: 'error', message: err instanceof Error ? err.message : 'Failed to fetch road data.' });
     }

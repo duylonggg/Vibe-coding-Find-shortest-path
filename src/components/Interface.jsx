@@ -324,19 +324,34 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
             {routes.length > 0 && (
                 <div style={{
                     position: "fixed",
-                    left: 16,
-                    bottom: 16,
+                    left: "50%",
+                    bottom: 36,
+                    transform: "translateX(-50%)",
                     zIndex: 2500,
-                    minWidth: 230,
+                    minWidth: 260,
+                    maxWidth: 380,
                     borderRadius: 10,
                     overflow: "hidden",
                     border: `1px solid ${isDark ? "#334155" : "#d1d5db"}`,
                     background: isDark ? "#0f172a" : "#fff",
-                    boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.5)" : "0 2px 10px rgba(0,0,0,0.2)",
+                    boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(0,0,0,0.18)",
                 }}>
+                    <div style={{
+                        padding: "6px 12px 4px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                        textTransform: "uppercase",
+                        color: isDark ? "#94a3b8" : "#6b7280",
+                        borderBottom: `1px solid ${isDark ? "#1e293b" : "#f3f4f6"}`,
+                    }}>
+                        Routes
+                    </div>
                     {routes.map((route, index) => {
                         const isActive = index === activeRouteIndex;
                         const decimals = route.distanceKm >= 10 ? 1 : 2;
+                        const routeColor = index === 0 ? "#dc2626" : "#9333ea";
+                        const displayLabel = index === 0 ? "Shortest route" : `Alternative ${index}`;
                         return (
                             <button
                                 key={`${route.label}-${index}`}
@@ -345,22 +360,35 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                                 style={{
                                     width: "100%",
                                     border: "none",
-                                    borderBottom: index < routes.length - 1 ? `1px solid ${isDark ? "#334155" : "#e5e7eb"}` : "none",
-                                    background: isActive ? (isDark ? "#1e293b" : "#f3f4f6") : "transparent",
+                                    borderBottom: index < routes.length - 1 ? `1px solid ${isDark ? "#1e293b" : "#f3f4f6"}` : "none",
+                                    background: isActive ? (isDark ? "#1e293b" : "#f0f6ff") : "transparent",
                                     color: isDark ? "#e2e8f0" : "#1f2937",
                                     textAlign: "left",
                                     cursor: "pointer",
                                     padding: "10px 12px",
                                     display: "flex",
-                                    flexDirection: "column",
-                                    gap: 2,
+                                    alignItems: "center",
+                                    gap: 8,
                                 }}
                             >
-                                <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 600 }}>
-                                    {route.label}{index === 0 ? " (recommended)" : ""}
-                                </span>
-                                <span style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#6b7280" }}>
-                                    {route.distanceKm.toFixed(decimals)} km • {route.algorithm}
+                                <span style={{
+                                    display: "inline-block",
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: "50%",
+                                    background: routeColor,
+                                    flexShrink: 0,
+                                }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 600, color: isActive ? (isDark ? "#93c5fd" : "#1d4ed8") : (isDark ? "#e2e8f0" : "#1f2937"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        {displayLabel}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: isDark ? "#94a3b8" : "#6b7280", marginTop: 1 }}>
+                                        {route.algorithm}
+                                    </div>
+                                </div>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: isActive ? (isDark ? "#93c5fd" : "#1d4ed8") : (isDark ? "#e2e8f0" : "#1f2937"), whiteSpace: "nowrap", flexShrink: 0 }}>
+                                    {route.distanceKm.toFixed(decimals)} km
                                 </span>
                             </button>
                         );
