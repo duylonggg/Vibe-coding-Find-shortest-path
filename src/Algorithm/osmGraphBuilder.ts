@@ -19,6 +19,63 @@ interface OverpassResponse {
   elements: Array<OsmNode | OsmWay>;
 }
 
+// ── IndexedDB persistent cache ───────────────────────────────────────────────
+
+const IDB_DB_NAME = 'osm-graph-cache';
+const IDB_STORE_NAME = 'overpass-responses';
+/** Cache TTL: 24 hours */
+const IDB_TTL_MS = 24 * 60 * 60 * 1000;
+const IDB_VERSION = 1;
+
+interface IDBCacheEntry {
+  elements: Array<OsmNode | OsmWay>;
+  ts: number;
+}
+
+let _idb: IDBDatabase | null = null;
+
+function _openIDB(): Promise<IDBDatabase> {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE_NAME)) {
+        req.result.createObjectStore(IDB_STORE_NAME);
+      }
+    };
+    req.onsuccess = () => { _idb = req.result; resolve(req.result); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _idbGet(key: string): Promise<IDBCacheEntry | null> {
+  try {
+    const db = await _openIDB();
+    return new Promise((resolve) => {
+      const req = db.transaction(IDB_STORE_NAME, 'readonly').objectStore(IDB_STORE_NAME).get(key);
+      req.onsuccess = () => {
+        const val = req.result as IDBCacheEntry | undefined;
+        resolve(!val || Date.now() - val.ts > IDB_TTL_MS ? null : val);
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function _idbSet(key: string, elements: Array<OsmNode | OsmWay>): Promise<void> {
+  try {
+    const db = await _openIDB();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+      tx.objectStore(IDB_STORE_NAME).put({ elements, ts: Date.now() } satisfies IDBCacheEntry, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch { /* silently ignore IDB errors */ }
+}
+
 /** Maximum allowed bounding-box span (degrees). ~2° ≈ 220 km. */
 const MAX_BOX_DEGREES = 2.0;
 
@@ -186,25 +243,52 @@ async function _fetchAndCacheGraph(
   const effectiveLngSpan = lngSpan ?? east - west;
   const roadPattern = getRoadTypePattern(effectiveLatSpan, effectiveLngSpan);
   const timeout = getOverpassTimeout(effectiveLatSpan, effectiveLngSpan);
-  // Only fetch the road types appropriate for this area size
-  const query =
-    `[out:json][timeout:${timeout}];` +
-    `(way[highway~"^(${roadPattern})$"]` +
-    `(${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}););(._;>;);out body;`;
 
-  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+  // Cache key rounded to ~1 km precision
+  const idbKey = `bbox:${south.toFixed(3)},${north.toFixed(3)},${west.toFixed(3)},${east.toFixed(3)}:${roadPattern}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+  let elements: Array<OsmNode | OsmWay>;
+
+  // ── 1. Try IndexedDB persistent cache first ──────────────────────────────
+  const cached = await _idbGet(idbKey);
+  if (cached) {
+    console.log(`[OSM] bbox IDB cache hit (${cached.elements.length} elements)`);
+    elements = cached.elements;
+  } else {
+    // ── 2. Use optimized Overpass query: ways get full body (tags), nodes
+    //    get skeleton only (id + lat/lon, no tags) via `out skel qt`.
+    //    This significantly reduces response payload vs the previous
+    //    `(._;>;);out body;` pattern.
+    const query =
+      `[out:json][timeout:${timeout}];` +
+      `(way[highway~"^(${roadPattern})$"]` +
+      `(${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}););` +
+      `out body;>;out skel qt;`;
+
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+    const t0 = performance.now();
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+    }
+    const tFetch = performance.now();
+    console.log(`[OSM] bbox fetch: ${(tFetch - t0).toFixed(0)}ms`);
+
+    const data: OverpassResponse = await response.json();
+    const tParse = performance.now();
+    console.log(`[OSM] bbox parse: ${(tParse - tFetch).toFixed(0)}ms, elements: ${data.elements.length}`);
+
+    elements = data.elements;
+    // Persist to IndexedDB asynchronously (do not block graph building)
+    _idbSet(idbKey, elements);
   }
-  const data: OverpassResponse = await response.json();
 
-  // Separate nodes and ways
+  // ── 3. Separate nodes and ways ───────────────────────────────────────────
   const osmNodes = new Map<number, OsmNode>();
   const osmWays: OsmWay[] = [];
 
-  for (const el of data.elements) {
+  for (const el of elements) {
     if (el.type === 'node') {
       osmNodes.set(el.id, el as OsmNode);
     } else if (el.type === 'way') {
@@ -221,6 +305,9 @@ async function _fetchAndCacheGraph(
   for (const way of osmWays) {
     for (const nid of way.nodes) usedNodeIds.add(nid);
   }
+
+  // ── 4. Build graph ───────────────────────────────────────────────────────
+  const tBuildStart = performance.now();
 
   // Create graph nodes
   const nodes = new Map<string, GraphNode>();
@@ -264,6 +351,9 @@ async function _fetchAndCacheGraph(
       }
     }
   }
+
+  const tBuildEnd = performance.now();
+  console.log(`[OSM] bbox build: ${(tBuildEnd - tBuildStart).toFixed(0)}ms, nodes: ${nodes.size}, ways: ${osmWays.length}`);
 
   // Store with placeholder start/end (snapping happens per-query in buildOsmGraph)
   const graph: Graph = { nodes, startId: '', endId: '' };
@@ -387,29 +477,52 @@ export async function buildOsmGraphCorridor(start: LatLng, end: LatLng): Promise
     distKm > CORRIDOR_THRESH_SHORT_KM ? CORRIDOR_WIDTH_MED_M   :
                                         CORRIDOR_WIDTH_SHORT_M;
 
-  const query =
-    `[out:json][timeout:${timeout}];` +
-    `(way[highway~"^(${roadPattern})$"]` +
-    `(around:${corridorMeters},${start.lat},${start.lng},${end.lat},${end.lng}););` +
-    `(._;>;);out body;`;
-
-  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-
   // Benefit from any already-in-progress prefetch before firing the main request
   if (_prefetchPromise) {
     await _prefetchPromise.catch(() => {});
   }
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
-  }
-  const data: OverpassResponse = await response.json();
+  // ── 1. Try IndexedDB persistent cache first ──────────────────────────────
+  const idbKey = `corridor:${start.lat.toFixed(3)},${start.lng.toFixed(3)},${end.lat.toFixed(3)},${end.lng.toFixed(3)}:${corridorMeters}:${roadPattern}`;
+  const cachedIDB = await _idbGet(idbKey);
 
+  let data: OverpassResponse;
+  if (cachedIDB) {
+    console.log(`[OSM] corridor IDB cache hit (${cachedIDB.elements.length} elements)`);
+    data = { elements: cachedIDB.elements };
+  } else {
+    // ── 2. Use optimized Overpass query: ways get full body (tags), nodes
+    //    get skeleton only (id + lat/lon, no tags) via `out skel qt`.
+    const query =
+      `[out:json][timeout:${timeout}];` +
+      `(way[highway~"^(${roadPattern})$"]` +
+      `(around:${corridorMeters},${start.lat},${start.lng},${end.lat},${end.lng}););` +
+      `out body;>;out skel qt;`;
+
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+    const t0 = performance.now();
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+    }
+    const tFetch = performance.now();
+    console.log(`[OSM] corridor fetch: ${(tFetch - t0).toFixed(0)}ms, dist: ${distKm.toFixed(1)}km, width: ${corridorMeters}m`);
+
+    data = await response.json();
+    const tParse = performance.now();
+    console.log(`[OSM] corridor parse: ${(tParse - tFetch).toFixed(0)}ms, elements: ${data.elements.length}`);
+
+    // Persist to IndexedDB asynchronously
+    _idbSet(idbKey, data.elements);
+  }
+
+  const tBuildStart = performance.now();
   const { graph, index } = _parseOverpassResponse(
     data,
     'No road data found along the corridor. Try choosing different points or switching to Radius mode.'
   );
+  console.log(`[OSM] corridor build: ${(performance.now() - tBuildStart).toFixed(0)}ms, nodes: ${graph.nodes.size}`);
 
   const startId = index.nearestId(start.lat, start.lng, graph.nodes);
   const endId   = index.nearestId(end.lat,   end.lng,   graph.nodes);
