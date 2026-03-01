@@ -7,7 +7,7 @@ import { INITIAL_COLORS, LOCATIONS } from "../config";
 import { arrayToRgb, rgbToArray } from "../helpers";
 import LocationAutocomplete from "./LocationAutocomplete";
 
-const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, isDark = false, onToggleDark, onSetStart, onSetEnd }, ref) => {
+const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, isDark = false, onToggleDark, onSetStart, onSetEnd, routes = [], activeRouteIndex = 0, onRouteSelect }, ref) => {
     const [sidebar, setSidebar] = useState(false);
     const sidebarBg = isDark ? '#1e293b' : undefined;
     const sidebarText = isDark ? '#e2e8f0' : '#222';
@@ -318,6 +318,53 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
             {loading && (
                 <div className="loader-container">
                     <CircularProgress style={{ color: "#2ea064" }} />
+                </div>
+            )}
+
+            {routes.length > 0 && (
+                <div style={{
+                    position: "fixed",
+                    left: 16,
+                    bottom: 16,
+                    zIndex: 2500,
+                    minWidth: 230,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: `1px solid ${isDark ? "#334155" : "#d1d5db"}`,
+                    background: isDark ? "#0f172a" : "#fff",
+                    boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.5)" : "0 2px 10px rgba(0,0,0,0.2)",
+                }}>
+                    {routes.map((route, index) => {
+                        const isActive = index === activeRouteIndex;
+                        const decimals = route.distanceKm >= 10 ? 1 : 2;
+                        return (
+                            <button
+                                key={`${route.label}-${index}`}
+                                type="button"
+                                onClick={() => onRouteSelect?.(index)}
+                                style={{
+                                    width: "100%",
+                                    border: "none",
+                                    borderBottom: index < routes.length - 1 ? `1px solid ${isDark ? "#334155" : "#e5e7eb"}` : "none",
+                                    background: isActive ? (isDark ? "#1e293b" : "#f3f4f6") : "transparent",
+                                    color: isDark ? "#e2e8f0" : "#1f2937",
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                    padding: "10px 12px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 2,
+                                }}
+                            >
+                                <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 600 }}>
+                                    {route.label}{index === 0 ? " (recommended)" : ""}
+                                </span>
+                                <span style={{ fontSize: 12, color: isDark ? "#94a3b8" : "#6b7280" }}>
+                                    {route.distanceKm.toFixed(decimals)} km • {route.algorithm}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
