@@ -6,7 +6,7 @@ import { FlyToInterpolator } from "deck.gl";
 import { TripsLayer } from "@deck.gl/geo-layers";
 import { createGeoJSONCircle } from "../helpers";
 import { useEffect, useRef, useState } from "react";
-import { getBoundingBoxFromPolygon, getMapGraph, getNearestNode } from "../services/MapService";
+import { getBoundingBoxFromPolygon, getMapGraph, getNearestNode, mergeMapGraph } from "../services/MapService";
 import PathfindingState from "../models/PathfindingState";
 import Interface from "./Interface";
 import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE, MAP_STYLE_DARK } from "../config";
@@ -254,9 +254,27 @@ function Map({ isDark = false, onToggleDark }) {
     }
 
     function changeRadius(radius) {
+        const oldRadius = settings.radius;
         changeSettings({...settings, radius});
         if(startNode) {
-            mapClick({coordinate: [startNode.lon, startNode.lat]}, {}, radius);
+            if(radius > oldRadius && state.current.graph) {
+                // Increasing radius: only fetch new area and merge into existing graph
+                const circle = createGeoJSONCircle([startNode.lon, startNode.lat], radius);
+                setSelectionRadius([{ contour: circle }]);
+                clearPath();
+                const loadingHandle = setTimeout(() => setLoading(true), 300);
+                mergeMapGraph(getBoundingBoxFromPolygon(circle), state.current.graph).then(() => {
+                    clearTimeout(loadingHandle);
+                    setLoading(false);
+                }).catch(() => {
+                    clearTimeout(loadingHandle);
+                    setLoading(false);
+                    ui.current.showSnack("Failed to load additional map data. Please try again.");
+                });
+            } else {
+                // Decreasing radius or no existing graph: full reload
+                mapClick({coordinate: [startNode.lon, startNode.lat]}, {}, radius);
+            }
         }
     }
 

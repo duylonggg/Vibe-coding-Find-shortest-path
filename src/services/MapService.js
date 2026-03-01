@@ -42,6 +42,54 @@ export async function getNearestNode(latitude, longitude) {
 }
 
 /**
+ * Fetches additional map data and merges it into an existing graph.
+ * Nodes and edges that already exist in the graph are skipped.
+ * @param {Array} boundingBox array with 2 objects that have a latitude and longitude property
+ * @param {import("../models/Graph").default} existingGraph graph to merge new data into
+ * @returns {Promise<import("../models/Graph").default>} the updated graph
+ */
+export async function mergeMapGraph(boundingBox, existingGraph) {
+    const response = await fetchOverpassData(boundingBox);
+    const data = await response.json();
+    const elements = data.elements;
+
+    // Build a Set of existing edge pairs for O(1) duplicate detection
+    const existingEdgeKeys = new Set();
+    for (const [, node] of existingGraph.nodes) {
+        for (const edge of node.edges) {
+            const other = edge.getOtherNode(node);
+            existingEdgeKeys.add(`${node.id}-${other.id}`);
+        }
+    }
+
+    for (const element of elements) {
+        if (element.type === "node") {
+            if (!existingGraph.getNode(element.id)) {
+                existingGraph.addNode(element.id, element.lat, element.lon);
+            }
+        } else if (element.type === "way") {
+            if (!element.nodes || element.nodes.length < 2) continue;
+
+            for (let i = 0; i < element.nodes.length - 1; i++) {
+                const node1 = existingGraph.getNode(element.nodes[i]);
+                const node2 = existingGraph.getNode(element.nodes[i + 1]);
+
+                if (!node1 || !node2) continue;
+
+                const key = `${node1.id}-${node2.id}`;
+                if (!existingEdgeKeys.has(key)) {
+                    node1.connectTo(node2);
+                    existingEdgeKeys.add(key);
+                    existingEdgeKeys.add(`${node2.id}-${node1.id}`);
+                }
+            }
+        }
+    }
+
+    return existingGraph;
+}
+
+/**
  * Fetches map data and converts them to graph structure
  * @param {Array} boundingBox array with 2 objects that have a latitude and longitude property 
  * @param {Number} startNodeId 
